@@ -16,7 +16,6 @@ topicfiles = dict(sorted(topicfiles.items(), key=lambda x: x[0]))
 clusterfiles = ({int(filename.split('_')[-1].split('.')[0]): f"{clusters_dir}/{filename}" for filename in os.listdir(clusters_dir)})
 clusterfiles = dict(sorted(clusterfiles.items(), key=lambda x: x[0]))
 
-# %%
 outlet_weights = {
     'democracynow' : -2.0,
     'thenation' : -1.5,
@@ -27,17 +26,23 @@ outlet_weights = {
     'dailywire' : 1.5,
     'breitbart' : 2.0
 }
-
 alpha = 0.8
 def squash(z):
     return np.tanh(alpha * z)
 
-def get_score(probs):
+def get_score(probs, weights=outlet_weights):
     z = {o: (probs[o] - source_stats[o][0]) / source_stats[o][1] for o in probs}
     s = {o: squash(z[o]) for o in probs}
-    raw = sum(outlet_weights[o] * s[o] for o in probs)
-    score = raw / sum(abs(outlet_weights[o]) for o in probs)
+    raw = sum(weights[o] * s[o] for o in probs)
+    score = raw / sum(abs(weights[o]) for o in probs)
     return score
+
+def compute_scores(weights=outlet_weights):
+    newdict = weekdict
+    for weeknum in weekdict:
+        for cluster in weekdict[weeknum]:
+            newdict[weeknum][cluster]['score'] = get_score(weekdict[weeknum][cluster]['probs'], weights=weights)
+    return newdict
 
 weekdict = {}
 for weeknum, file in topicfiles.items():
@@ -56,8 +61,11 @@ for weeknum in weekdict:
     for cluster in weekdict[weeknum]:
         weekdict[weeknum][cluster]['score'] = get_score(weekdict[weeknum][cluster]['probs'])
 
+scoredict = weekdict
+
+# streamlit shit
 st.set_page_config(layout='wide')
-st.title('twitter clusters over time')
+st.title('Twitter Clusters Over Time')
 
 weeks = list(topicfiles.keys())
 if 'week' not in st.session_state:
@@ -66,21 +74,39 @@ if 'week' not in st.session_state:
 def go_prev():
     idx = weeks.index(st.session_state.week)
     if idx > 0:
-        st.session_state.week = weeks[idx-1]
+        st.session_state.week = weeks[idx - 1]
 
 def go_next():
     idx = weeks.index(st.session_state.week)
-    if idx < len(weeks)-1:
-        st.session_state.week = weeks[idx+1]
+    if idx < len(weeks) - 1:
+        st.session_state.week = weeks[idx + 1]
 
-st.sidebar.title('navigate weeks')
-
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    st.button('← prev', on_click=go_prev)
-with col2:
-    st.button('next →', on_click=go_next)
+st.sidebar.title('Navigate Weeks')
+c1, c2 = st.sidebar.columns(2)
+with c1: st.button('← prev', on_click=go_prev)
+with c2: st.button('next →', on_click=go_next)
 selected = st.session_state.week
+
+for outlet, default in outlet_weights.items():
+    key = f"weight_{outlet}"
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+if st.sidebar.button("Reset weights to default"):
+    for outlet, default in outlet_weights.items():
+        st.session_state[f"weight_{outlet}"] = default
+
+st.sidebar.markdown("### Adjust Outlet Weights")
+new_weights = outlet_weights
+for outlet, default in new_weights.items():
+    new_weights[outlet] = st.sidebar.slider(
+        label=f"{outlet}",
+        min_value=-5.0, max_value=5.0,
+        value=float(default),
+        step=0.1
+    )
+scoredict = compute_scores(new_weights)
+
 year = 2024
 monday = datetime.date.fromisocalendar(year, selected, 1)
 sunday = datetime.date.fromisocalendar(year, selected, 7)
@@ -124,7 +150,7 @@ selected_clusters = st.multiselect(
 if selected_clusters:
     st.subheader(f"Cluster Keywords — Week {selected}")
     for cl in selected_clusters:
-        entry = weekdict[selected][cl]
+        entry = scoredict[selected][cl]
         score = entry['score']
         keywords = entry['topics']
         st.markdown(f"**Cluster {cl} (score: {score:.3f})**")
