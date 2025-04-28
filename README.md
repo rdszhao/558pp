@@ -1,6 +1,6 @@
 ## Overview
 
-This project implements an end-to-end pipeline for analyzing weekly Twitter activity around the U.S. election, deriving both network-based community clusters and semantic topic models, then visualizing the results via a Streamlit dashboard. At a high level:
+This project implements an end-to-end pipeline for analyzing weekly Twitter activity around the 2024 U.S. election, deriving both network-based community clusters and semantic topic models, then visualizing the results via a Streamlit dashboard. At a high level:
 
 1. **Data Ingestion & Preprocessing** (`dataloader.py`)  
 2. **Weekly Stitching of Metrics & Text** (`datastitcher.py`)  
@@ -40,36 +40,6 @@ Each stage is a standalone Python script; together they produce:
 
 ---
 
-## Installation
-
-1. **Clone the repository**  
-   ```bash
-   git clone https://github.com/your-org/us-election-analysis.git
-   cd us-election-analysis
-   ```
-
-2. **Create a Conda environment**  
-   ```bash
-   conda create -n uscelection python=3.8 -y
-   conda activate uscelection
-   ```
-
-3. **Install dependencies**  
-   ```bash
-   pip install -r requirements.txt
-   # requirements.txt should include:
-   # pandas, numpy, scikit-learn, torch, torch-geometric, torch-scatter,
-   # cuml, cupy, bertopic, sentence-transformers, streamlit, plotly, tqdm
-   ```
-
-4. **Configure GPU devices**  
-   In `clustering.py` and `topics.py`, you can control which CUDA devices are used via:
-   ```python
-   os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2'    # adjust as needed
-   ```
-
----
-
 ## 1. Data Loading & Preprocessing (`dataloader.py`)
 
 This script processes two data sources:
@@ -89,12 +59,6 @@ This script processes two data sources:
     ```bash
     data/processed/uscelection/headlines.csv
     ```
-
-Key implementation notes:
-
-- `extract(text, val, listed=False)` uses a compiled regex to robustly pull numeric fields from JSON strings.  
-- Bulk concatenation via `pd.concat(dfs)` ensures efficient merging.
-
 ---
 
 ## 2. Weekly Stitching (`datastitcher.py`)
@@ -107,7 +71,7 @@ Splits the processed data into per‐week files for downstream analysis:
    ```python
    metric = (likeCount + retweetCount + replyCount + quoteCount) * log(viewCount + ε) + 1
    ```
-4. **Rename** `mentionedUsers` → `mentionedUser` (count of mentions)  
+4. **Explode + Rename** `mentionedUsers` → `mentionedUser` (multiple to one)  
 5. **Write** per‐week CSVs:
    - **Metrics** → `data/processed/uscelection/weeks/week_<WEEK>.csv.gz`  
    - **Raw Texts** → `data/processed/uscelection/weektxt/week_<WEEK>.tsv.gz`  
@@ -146,7 +110,7 @@ Implements a **link‐prediction**-trained GraphSAGE model, then clusters node e
 3. **Dimensionality Reduction**  
    - **First UMAP** (8D) → embeddings for clustering  
    - **Normalize** features  
-   - **KMeans** (default 15 clusters) → cluster labels  
+   - **KMeans** (15 clusters) → cluster labels  
    - **Second UMAP** (2D) → for visualization, compute per‐cluster mean/std, filter outliers
 
 4. **Outputs**  
@@ -175,7 +139,7 @@ For each week’s raw tweets:
    ```json
    {
      "<topic_id>": {
-       "topics": ["keyword1", "keyword2", …],
+       "topics": ["keywords1", "keywords2", …],
        "alignments": {"cnn": 12, "nyt": 8, …}
      }, …
    }
@@ -191,46 +155,11 @@ A Streamlit dashboard to explore both community clusters and topic maps:
 - **Main view**:
   1. **Cluster Scatter**: Plotly scatter of nodes colored by cluster label  
   2. **Cluster Keywords**: multi-select clusters → display top keywords & cluster quality scores  
-  3. **Topic Bar Charts**: show distribution of aligned news sources per topic  
 
 Run locally:
 ```bash
 streamlit run viz.py
 ```
-
----
-
-## Deep Technical Details
-
-- **Link-Prediction Training**  
-  - Positive logits:  
-    \[
-      \text{pos\_dot} = z_i \cdot z_j,\quad (i,j)\in E
-    \]
-  - Negative sampling ratio = number of edges  
-  - Loss:  
-    \[
-      \mathcal{L} = \mathrm{BCE}(\text{pos\_dot}, 1) + \mathrm{BCE}(\text{neg\_dot}, 0)
-    \]
-
-- **Weighted Aggregation**  
-  \[
-    m_i = \sum_{j\in \mathcal{N}(i)} w_{ij}\,x_j,\quad 
-    \hat{x}_i = \sigma\big(W\, [x_i \,\|\, m_i]\big)
-  \]
-  Normalization by \(\sqrt{\deg(i)\,\deg(j)}\) ensures scale invariance.
-
-- **Dimensionality Reduction & Clustering**  
-  - **UMAP**: fast, GPU‐accelerated via cuML for high-dim embedding  
-  - **KMeans**: cuML implementation for >10⁵ points  
-  - **Outlier Filtering**: z-distance in 2D ≤3.0 to remove spurious embeddings
-
-- **BERTopic Customization**  
-  - Uses cuML UMAP & HDBSCAN for speed on large text corpora  
-  - `generate_topic_labels(nr_words=10, separator='_' )` builds consistent labels  
-  - Alignment of tweet topics ↔ news sources via embedding nearest-neighbor counts
-
----
 
 ## Usage Workflow
 
@@ -266,15 +195,3 @@ streamlit run viz.py
 - **Visualization**: streamlit, plotly  
 
 Ensure your CUDA drivers and CUDA-enabled libraries are installed for GPU acceleration.
-
----
-
-## Acknowledgments
-
-- **BERTopic** by Maarten Grootendorst  
-- **PyTorch Geometric** by Rusty Rossmann et al.  
-- **cuML** from RAPIDS AI  
-
----
-
-Feel free to open issues for bugs or feature requests!
