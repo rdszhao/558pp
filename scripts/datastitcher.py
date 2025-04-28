@@ -1,40 +1,48 @@
 # %%
-import os
-import pandas as pd
+import ast
 from tqdm import tqdm
+import numpy as np
+import pandas as pd
 
-partsdir = '../data/usc-x-24-us-election'
 processed_dir = '../data/processed/uscelection'
-parts = [folder for folder in os.listdir(partsdir) if 'part' in folder]
-outdirs = [f"{processed_dir}/{part}/{fname.split('.')[0]}_processed.tsv.gz" for part in parts for fname in os.listdir(f"{partsdir}/{part}")]
-# %%
-dfs = []
-file = outdirs[0]
-df = pd.read_csv(file, compression='gzip', sep='\t')
-df
-# %%
+weeks_dir = '../data/processed/uscelection/weeks'
+txt_dir = '../data/processed/uscelection/weektxt'
 
-dfs = []
-for file in tqdm(outdirs):
-	try:
-		df = pd.read_csv(file, compression='gzip', sep='\t')
-		dfs.append(df)
-	except:
-		print(f"{file} - error")
-		continue
+df = pd.read_csv(f"{processed_dir}/alltweets.tsv.gz", sep='\t', compression='gzip')
+df['mentionedUsers'] = df['mentionedUsers'].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else [])
 
-df = pd.concat(dfs)
-# %%
+df['id'] = df['id'].astype(int, errors='ignore')
+df['user'] = df['user'].astype(int, errors='ignore')
 
-df['date'] = pd.to_datetime(df['date'])
-df = df.sort_values('date')
-df['week'] = df['date'].dt.isocalendar().week
-df['year'] = df['date'].dt.year
-df['week'] = df['week'] + (df['year'] - df['year'].min()) * 52
-df = df[df['year'] == 2024]
-df = df.drop('year', axis=1)
-df = df.dropna(subset=['viewCount'])
+mentions = set()
+for arr in df['mentionedUsers']:
+	if isinstance(arr, list):
+		for e in arr :
+			mentions.add(int(e))
 
-for week in tqdm(df['week'].unique()):
-	df[df['week'] == week].to_csv(f"{processed_dir}/weeks/week_{week}.csv")
-# %%
+df = df[(df['mentionedUsers'].astype(bool)) | (df['user'].isin(mentions))]
+
+cols = ['likeCount','retweetCount','replyCount','quoteCount','viewCount']
+df[cols] = df[cols].apply(pd.to_numeric, errors='coerce')
+
+explodf = df.explode('mentionedUsers')
+aggdf = explodf.groupby(['week', 'user', 'mentionedUsers']).agg({
+	'replyCount': 'sum',
+	'retweetCount': 'sum',
+	'quoteCount': 'sum',
+	'likeCount': 'sum',
+	'viewCount': 'sum',
+}).reset_index()
+aggdf['metric'] = \
+	(aggdf['likeCount'] + aggdf['retweetCount'] + aggdf['replyCount'] + aggdf['quoteCount']) \
+	* (aggdf['viewCount'] + 0.01).apply(np.log) + 1
+aggdf = aggdf.rename(columns={'mentionedUsers': 'mentionedUser'})
+aggdf['user'] = aggdf['user'].astype(str)
+newdf = aggdf[['week', 'user', 'metric', 'mentionedUser']]
+
+for week in tqdm(newdf['week'].unique()):
+	weekdf = newdf[newdf['week'] == week]
+	week_tdf = df[df['week'] == week][['user', 'text']]
+	weekdf = weekdf.drop(['week'], axis=1)
+	weekdf.to_csv(f"{weeks_dir}/week_{week}.csv.gz", index=False)
+	week_tdf.to_csv(f"{txt_dir}/week_{week}.tsv.gz", sep='\t', index=False)
