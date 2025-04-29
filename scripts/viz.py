@@ -20,12 +20,12 @@ clusterfiles = ({int(filename.split('_')[-1].split('.')[0]): f"{clusters_dir}/{f
 clusterfiles = dict(sorted(clusterfiles.items(), key=lambda x: x[0]))
 
 outlet_weights = {
-    'democracynow' : -4.0,
     'thenation' : -5.0,
+    'democracynow' : -4.0,
     'nyt' : -2.2,
     'cnn' : -1.3,
-    'fox' : 3.9,
     'nypost' : 2.9,
+    'fox' : 3.9,
     'dailywire' : 5.0,
     'breitbart' : 6.0
 }
@@ -151,11 +151,11 @@ with tab2:
         if key not in st.session_state:
             st.session_state[key] = default
 
-    if st.sidebar.button("Reset weights to default"):
+    if st.sidebar.button("reset weights to default"):
         for outlet, default in outlet_weights.items():
            st.session_state[f"weight_{outlet}"] = default
 
-    st.sidebar.markdown("### Adjust Outlet Weights")
+    st.sidebar.markdown("### adjust outlet weights")
     new_weights = outlet_weights
     for outlet, default in new_weights.items():
         new_weights[outlet] = st.sidebar.slider(
@@ -207,18 +207,17 @@ with tab2:
     )
 
     if selected_clusters:
-        st.subheader(f"Cluster Keywords — Week {selected}")
+        st.subheader(f"cluster keywords — week {selected}")
         for cl in selected_clusters:
             entry = scoredict[selected][cl]
             score = entry['score']
             keywords = entry['topics']
-            st.markdown(f"**Cluster {cl} (score: {score:.3f})**")
+            st.markdown(f"**cluster {cl} (score: {score:.3f})**")
             cols = st.columns(1)
             for idx, kw in enumerate(keywords):
                 cols[idx % 1].write(f"- {kw}")
     else:
-        st.info('No clusters selected.')
+        st.info('no clusters selected.')
 
     st.markdown('---')
-    st.markdown('Use the arrows to step through weeks.')
-    st.markdown('Use the arrows to step through weeks.')
+    st.markdown('use arrows to step through weeks.')
