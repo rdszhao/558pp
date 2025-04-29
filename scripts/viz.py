@@ -5,19 +5,22 @@ import numpy as np
 import pandas as pd
 import datetime
 import networkx as nx
+import random
 from pyvis.network import Network
 import streamlit as st
-import tempfile
 from collections import Counter
 import plotly.express as px
 
-clusters_dir = './data/processed/clusters'
-topicmaps_dir = './data/processed/topicmaps'
+clusters_dir = '../data/processed/clusters'
+topicmaps_dir = '../data/processed/topicmaps'
+data_dir = '../data/processed/uscelection/weeks'
 
-topicfiles = ({int(filename.split('_')[-1].split('.')[0]): f"{topicmaps_dir}/{filename}" for filename in os.listdir(topicmaps_dir)})
+topicfiles = ({int(filename.split('_')[-1].split('.')[0]): f"{topicmaps_dir}/{filename}" for filename in os.listdir(topicmaps_dir) if 'DS' not in filename})
 topicfiles = dict(sorted(topicfiles.items(), key=lambda x: x[0]))
 clusterfiles = ({int(filename.split('_')[-1].split('.')[0]): f"{clusters_dir}/{filename}" for filename in os.listdir(clusters_dir)})
 clusterfiles = dict(sorted(clusterfiles.items(), key=lambda x: x[0]))
+datafiles = ({int(filename.split('_')[-1].split('.')[0]): f"{data_dir}/{filename}" for filename in os.listdir(data_dir) if 'DS' not in filename})
+datafiles = dict(sorted(datafiles.items(), key=lambda x: x[0]))
 
 outlet_weights = {
     'thenation' : -5.0,
@@ -29,15 +32,14 @@ outlet_weights = {
     'dailywire' : 5.0,
     'breitbart' : 6.0
 }
-alpha = 0.8
-def squash(z):
+
+def squash(z, alpha=0.8):
     return np.tanh(alpha * z)
 
 def get_score(probs, weights=outlet_weights):
     z = {o: (probs[o] - source_stats[o][0]) / source_stats[o][1] for o in probs}
     s = {o: squash(z[o]) for o in probs}
-    raw = sum(weights[o] * s[o] for o in probs)
-    score = raw / sum(abs(weights[o]) for o in probs)
+    score = squash(sum(weights[o] * s[o] for o in probs), alpha=0.6)
     return score
 
 def compute_scores(weights=outlet_weights):
@@ -70,62 +72,9 @@ scoredict = weekdict
 st.set_page_config(layout='wide')
 st.title('Twitter Clusters Over Time')
 
-tab1, tab2 = st.tabs(['Knowledge Graph', 'Clusters Visualization'])
+tab1, tab2 = st.tabs(['clusters visualization', 'knowledge graph'])
 
 with tab1:
-    if 'graph' not in st.session_state:
-        #tweet_files = ['may_july_chunk_1_processed.tsv', 'aug_chunk_41_processed.tsv', 'september_chunk_41_processed.tsv', 'november_chunk_43_processed.tsv']
-        
-        tweets_df = pd.read_csv(f'./data/processed/kg_viz_data/aug_chunk_41_processed.tsv', delimiter='\t')
-        metrics_df = pd.read_csv('./data/processed/kg_viz_data/alltweets.tsv', delimiter='\t')
-
-        texts = tweets_df[tweets_df['label'] == 'text']
-        replies = tweets_df[tweets_df['label'] == 'in_reply_to_user_id_str']
-        replies['replied_to_user'] = replies['node2']
-
-        merge = pd.merge(texts, replies[['node1','replied_to_user']], on='node1')
-        merge = pd.merge(merge, metrics_df, left_on='node1', right_on='id')
-        tweet_sample = merge.sample(500, random_state=1738)
-        
-        graph = nx.DiGraph()
-
-        for idx, row in tweet_sample.iterrows():
-            tweet_id = int(row['node1'])
-            text = row['node2']
-            replies = row['replyCount']
-            retweets = row['retweetCount']
-            likes = row['likeCount']
-            views = row['viewCount']
-            quotes = row['quoteCount']
-            date = row['date']
-            user_id = int(row['user'])
-
-            tweet_title = f'Tweet: {text[:100]}\nLikes: {likes}\nRetweets: {retweets}\nViews: {views}\nReplies: {replies}'
-
-            graph.add_node(user_id, label=f'User:{str(user_id)[-4:]}', color='green')
-            graph.add_node(tweet_id, label=f'Tweet:{str(tweet_id)[-4:]}', title=tweet_title, color='skyblue')
-            graph.add_edge(user_id, tweet_id, label='tweeted', color='skyblue')
-            if row['mentionedUsers'] != '[]':
-                if pd.notna(row['mentionedUsers']):
-                    for mentioned_user in row['mentionedUsers'].strip("[]").split(', '):
-                        mentioned_user = str(mentioned_user)
-                        graph.add_node(mentioned_user, label=f'User:{str(mentioned_user)[-4:]}', color='green')
-                        graph.add_edge(tweet_id, mentioned_user, label='mentioned', color='orange')
-            if pd.notna(row['replied_to_user']):
-                user_replied_to_id = str(row['replied_to_user'])
-                graph.add_node(user_replied_to_id, label=f'User:{user_replied_to_id[-4:]}', color='green')
-                graph.add_edge(tweet_id, user_replied_to_id, label='replied_to', color= 'purple')
-                
-        net = Network(directed=True)
-        net.from_nx(graph)
-        
-        path = '/tmp/knowledge_graph.html'
-        net.save_graph(path)
-        with open(path, 'r', encoding='utf-8') as f:
-            html_content = f.read()
-        st.components.v1.html(html_content, height=800, scrolling=True)
-        
-with tab2:
     weeks = list(topicfiles.keys())
     if 'week' not in st.session_state:
         st.session_state.week = weeks[0]
@@ -188,7 +137,7 @@ with tab2:
         color_continuous_scale='Portland',
         range_color=[-1,1],
         hover_data={'label':True, 'score':True},
-        title=f"week of {monday:%b %d} — {sunday:%b %d, %y}"
+        title=f"week of {monday:%b %d} — {sunday:%b %d}"
     )
     fig.update_layout()
     fig.update_layout(
@@ -211,7 +160,7 @@ with tab2:
         for cl in selected_clusters:
             entry = scoredict[selected][cl]
             score = entry['score']
-            keywords = entry['topics']
+            keywords = entry['clean_topics']
             st.markdown(f"**cluster {cl} (score: {score:.3f})**")
             cols = st.columns(1)
             for idx, kw in enumerate(keywords):
@@ -221,3 +170,46 @@ with tab2:
 
     st.markdown('---')
     st.markdown('use arrows to step through weeks.')
+
+with tab2:
+    if 'graph' not in st.session_state:
+        tweet_sample = pd.read_csv(
+            datafiles[st.session_state.week]
+        ).nlargest(500, 'likeCount')
+        graph = nx.DiGraph()
+
+        for idx, row in tweet_sample.iterrows():
+            tweet_id = int(row['id'])
+            text = row['text']
+            replies = row['replyCount']
+            retweets = row['retweetCount']
+            likes = row['likeCount']
+            views = row['viewCount']
+            quotes = row['quoteCount']
+            date = row['date']
+            user_id = int(row['user'])
+
+            tweet_title = f'Tweet: {text[:100]}\nLikes: {likes}\nRetweets: {retweets}\nViews: {views}\nReplies: {replies}'
+
+            graph.add_node(user_id, label=f'User:{str(user_id)[-4:]}', color='green')
+            graph.add_node(tweet_id, label=f'Tweet:{str(tweet_id)[-4:]}', title=tweet_title, color='skyblue')
+            graph.add_edge(user_id, tweet_id, label='tweeted', color='skyblue')
+            if row['mentionedUsers'] != '[]':
+                if pd.notna(row['mentionedUsers']):
+                    for mentioned_user in row['mentionedUsers'].strip("[]").split(', '):
+                        mentioned_user = str(mentioned_user)
+                        graph.add_node(mentioned_user, label=f'User:{str(mentioned_user)[-4:]}', color='green')
+                        graph.add_edge(tweet_id, mentioned_user, label='mentioned', color='orange')
+            if pd.notna(row['in_reply_to_user_id_str']):
+                user_replied_to_id = str(row['in_reply_to_user_id_str'])
+                graph.add_node(user_replied_to_id, label=f'User:{user_replied_to_id[-4:]}', color='green')
+                graph.add_edge(tweet_id, user_replied_to_id, label='replied_to', color= 'purple')
+                
+        net = Network(directed=True)
+        net.from_nx(graph)
+        
+        path = '/tmp/knowledge_graph.html'
+        net.save_graph(path)
+        with open(path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        st.components.v1.html(html_content, height=800, scrolling=True)

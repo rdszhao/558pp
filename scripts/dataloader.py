@@ -12,7 +12,7 @@ parts = [folder for folder in os.listdir(partsdir) if 'part' in folder]
 prefiles = [f"{partsdir}/{part}/{fname}" for part in parts for fname in os.listdir(f"{partsdir}/{part}") if '.csv' in fname]
 outdirs = [f"{processed_dir}/{part}/{fname.split('.')[0]}_processed.tsv.gz" for part in parts for fname in os.listdir(f"{partsdir}/{part}")]
 filemap = dict(zip(outdirs, prefiles))
-
+# %%
 def extract(text, val, listed=False):
 	try:
 		pattern = re.compile(rf"'{val}': '(\d+)'")
@@ -24,7 +24,7 @@ def extract(text, val, listed=False):
 	except:
 		return None
 
-attrs = ['id', 'user', 'text', 'viewCount', 'likeCount', 'retweetCount', 'replyCount', 'quoteCount', 'lang', 'mentionedUsers', 'date']
+attrs = ['id', 'user', 'text', 'viewCount', 'likeCount', 'retweetCount', 'replyCount', 'quoteCount', 'lang', 'mentionedUsers', 'date', 'in_reply_to_user_id_str']
 dfs = []
 
 for outdir, prefile in tqdm(filemap.items(), total=len(filemap)):
@@ -51,6 +51,7 @@ for outdir, prefile in tqdm(filemap.items(), total=len(filemap)):
 
 df = pd.concat(dfs)
 df.to_csv(f"{processed_dir}/alltweets.tsv.gz", sep='\t', index=False)
+# %%
 
 files = [os.path.join(newsdir, filename) for filename in os.listdir(newsdir) if '.csv' in filename]
 dfs = []
