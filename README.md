@@ -8,7 +8,7 @@ This project implements an end-to-end pipeline and dashboard for analyzing weekl
 4. **semantic topic modeling & alignment** (`topics.py`)  
 5. **interactive visualization** (`viz.py`)
 
-Each stage is a standalone Python script; together they produce:
+each stage is a standalone python script; together they produce:
 
 - **`data/processed/uscelection/weeks/`**: per-week CSV of user metrics  
 - **`data/processed/uscelection/weektxt/`**: per-week TSV of tweet texts  
@@ -61,7 +61,7 @@ This script processes two data sources:
     ```
 ---
 
-## 2. Weekly Stitching (`datastitcher.py`)
+## 2. weekly stitching (`datastitcher.py`)
 
 Splits the processed data into per‐week files for downstream analysis:
 
@@ -89,7 +89,7 @@ training a **link‐prediction**-trained GraphSAGE model then clustering the gra
      x = [1, in_degree(i), out_degree(i)]  for each node
      ```
 
-2. **Weighted GraphSAGE**  
+2. **weighted graphsage**  
    ```python
    class WeightedSAGEConv(nn.Module):
        def forward(self, x, edge_index, edge_weight):
@@ -120,8 +120,7 @@ training a **link‐prediction**-trained GraphSAGE model then clustering the gra
 
 ## 4. topic modeling & alignment (`topics.py`)
 
-For each week’s raw tweets:
-
+for each week’s raw tweets:
 1. **load** `weektxt/week_<week>.tsv.gz`, clean text via `remove_urls`  
 2. **embed** with `SentenceTransformer('all-MiniLM-L6-v2')`  
 3. **BERTopic** pipeline:
