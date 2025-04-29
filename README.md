@@ -42,7 +42,7 @@ each stage is a standalone python script; together they produce:
 
 ## 1. data loading & preprocessing (`dataloader.py`)
 
-This script processes two data sources:
+processing data sources:
 
 - **raw twitter json dumps** (per‐month files)  
   - Uses regex extraction to pull fields: `id`, `user`, `text`, `viewCount`, `likeCount`, `retweetCount`, `replyCount`, `quoteCount`, `mentionedUsers`, `date`  
@@ -63,7 +63,7 @@ This script processes two data sources:
 
 ## 2. weekly stitching (`datastitcher.py`)
 
-Splits the processed data into per‐week files for downstream analysis:
+split the processed data into per‐week chunks for downstream analysis:
 
 1. **load** `alltweets.tsv.gz`  
 2. **parse** `mentionedusers` lists with `ast.literal_eval`  
@@ -115,12 +115,11 @@ training a **link‐prediction**-trained GraphSAGE model then clustering the gra
      ```
      user_id, x, y, label (cluster ID)
      ```
-
 ---
 
 ## 4. topic modeling & alignment (`topics.py`)
+modelling topics for each week’s raw tweets using heavy gpu acceleration:
 
-for each week’s raw tweets:
 1. **load** `weektxt/week_<week>.tsv.gz`, clean text via `remove_urls`  
 2. **embed** with `SentenceTransformer('all-MiniLM-L6-v2')`  
 3. **BERTopic** pipeline:
@@ -142,9 +141,7 @@ for each week’s raw tweets:
    ```
 
 ---
-
 ## 5. visualization dashboard (`viz.py`)
-
 a streamlit dashboard to explore both community clusters and topic maps:
 
 - **sidebar**: week navigation (prev/next, dropdown)  
@@ -153,11 +150,6 @@ a streamlit dashboard to explore both community clusters and topic maps:
   2. **Cluster Keywords**: multi-select clusters → display top keywords & cluster quality scores  
 - **graph view**:
   - selected representation of the actual graph
-
-Run locally:
-```bash
-streamlit run viz.py
-```
 ---
 
 ## dependencies
